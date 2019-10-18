@@ -16,6 +16,7 @@ full_url = input("Enter link to scrape from: ")
 
 if 'wuxiaworld' in full_url:
     base_url = 'https://www.wuxiaworld.com/novel'
+    print("supported website")
 else:
     print("unsupported website")
     exit()
@@ -33,35 +34,63 @@ if not os.path.exists(directory):
 #create book
 book = epub.EpubBook()
 
+
+
 #load preexisting book
 filePath = os.path.join(save_path + '/' + novel_name + '.epub')
 if os.path.exists(filePath):
     book = epub.read_epub(save_path + '/' + novel_name + '.epub')
-    ebooklib.epub.EpubHtml
+    currentChapter = len(book.spine)
 else:
     # set metadata
     book.set_identifier('id' + novel_name)
     book.set_title(novel_name)
     book.set_language('en')
-    book.add_author('WuxiaWorld')
+    book.add_author('wuxiaworld')
+    currentChapter = 1
+
+    # init spine(chapter locations list)
+    book.spine = ['nav']
 
 response = requests.get(full_url)
 
+for x in range(6):
+    if response.status_code == 200:
+        soup = BeautifulSoup(response.text, "html.parser")
+        text = soup.find(id='chapter-content')
+        title = 'Chapter ' + str(currentChapter)
+        newChapter = epub.EpubHtml(title=title, file_name='chap_' + str(currentChapter) + '.xhtml', lang='en')
+        print(newChapter.file_name)
 
-if response.status_code == 200:
-    while response.status_code == 200:
-        if not os.path.exists(filePath):
-            currentFile = open(filePath, "w+")
-            
-            soup = BeautifulSoup(response.text, "html.parser")
-            text = soup.findAll(id='chapter-content')
+        newChapter.content = str(text)
+        print(text)
+        # add chapter to book
+        book.add_item(newChapter)
+        print(newChapter.title)
+        # add chapter location in book
+        book.spine.append(newChapter)
+        # add chapter to TOC
+        book.toc += (epub.Link(newChapter.file_name, newChapter.title, newChapter.title),
+                )
 
-            currentFile.write(str(text))
+        currentChapter += 1
 
         url = base_url + '/' + novel_name + '/' + chapter_link + str(currentChapter)
         print(url)
         response = requests.get(url)
-        currentChapter += 1
+
         time.sleep(1)
 
+# add default NCX and Nav file
+book.add_item(epub.EpubNcx())
+book.add_item(epub.EpubNav())
 
+# define CSS style
+style = 'BODY {color: white;}'
+nav_css = epub.EpubItem(uid="style_nav", file_name="style/nav.css", media_type="text/css", content=style)
+
+# add CSS file
+book.add_item(nav_css)
+
+# write to the file
+epub.write_epub(novel_name + '.epub', book, {})
